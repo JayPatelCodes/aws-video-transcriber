@@ -1,0 +1,10 @@
+# Ignore .env files containing sensitive information
+.env
+.env.local
+
+# Ignore node_modules
+node_modules/
+
+# Ignore any logs or temporary files
+logs/
+*.log
