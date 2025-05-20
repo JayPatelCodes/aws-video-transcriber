@@ -1,14 +1,16 @@
 import React, { useState } from "react";
 import VideoUploader from "./components/VideoUploader";
 import TranscriptDisplay from "./components/TranscriptDisplay";
+import TranscriptViewer from "./components/TranscriptViewer";
 
 function App() {
   const [jobName, setJobName] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string>("");
 
   return (
-    <div>
-      <h1>Video Upload</h1>
+    <div style={{ padding: "20px" }}>
+      <h1>Video Transcriber</h1>
+
       <VideoUploader
         onUploadComplete={(url: string, job: string) => {
           setVideoUrl(url);
@@ -24,6 +26,10 @@ function App() {
       )}
 
       {jobName && <TranscriptDisplay jobName={jobName} />}
+
+      <hr style={{ margin: "40px 0" }} />
+
+      <TranscriptViewer />
     </div>
   );
 }

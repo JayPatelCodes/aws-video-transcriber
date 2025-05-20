@@ -9,9 +9,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { TranscribeClient, StartTranscriptionJobCommand, GetTranscriptionJobCommand } from '@aws-sdk/client-transcribe';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { PutCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
 
 import { s3 } from './s3Client';
-
+import { docClient } from "./dynamoClient";
 
 const app = express();
 const port = 3001;
@@ -63,6 +64,8 @@ app.post('/start-transcription', async (req: Request, res: Response) => {
 
   const jobName = `transcription-${uuidv4()}`;
   const mediaUri = `s3://${bucketName}/${key}`;
+  const fileUrl = `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
+  const createdAt = new Date().toISOString();
 
   const command = new StartTranscriptionJobCommand({
     TranscriptionJobName: jobName,
@@ -74,12 +77,26 @@ app.post('/start-transcription', async (req: Request, res: Response) => {
 
   try {
     await transcribeClient.send(command);
+
+    const putCommand = new PutCommand({
+      TableName: process.env.DYNAMODB_TABLE_NAME,
+      Item: {
+        jobName,
+        videoKey: key,
+        fileUrl,
+        createdAt,
+      },
+    });
+
+    await docClient.send(putCommand);
+
     res.json({ message: 'Transcription job started.', jobName });
   } catch (error) {
-    console.error('Error starting transcription job:', error);
+    console.error('Error starting transcription job or writing to DB:', error);
     res.status(500).json({ error: 'Failed to start transcription job.' });
   }
 });
+
 
 app.get("/get-transcription/:jobName", async (req: Request, res: Response) => {
   const { jobName } = req.params;
@@ -98,7 +115,7 @@ app.get("/get-transcription/:jobName", async (req: Request, res: Response) => {
     if (!job) throw new Error("Job not found.");
 
     if (job.TranscriptionJobStatus === "COMPLETED") {
-      const key = ` ${jobName}.json`;
+      const key = `${jobName}.json`;
 
       const getCommand = new GetObjectCommand({ Bucket: bucketName, Key: key });
       const signedUrl = await getSignedUrl(s3, getCommand, { expiresIn: 3600 });
@@ -123,6 +140,42 @@ app.get("/get-transcription/:jobName", async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Failed to fetch transcription job." });
   }
 });
+
+app.get("/list-transcriptions", async (req, res) => {
+  try {
+    const result = await docClient.send(
+      new ScanCommand({
+        TableName: process.env.DYNAMODB_TABLE_NAME!,
+        ProjectionExpression: "jobName, createdAt, videoKey",
+      })
+    );
+
+    const items = result.Items || [];
+
+    // Generate a signed GET URL for each item
+    const jobsWithSignedUrls = await Promise.all(
+      items.map(async (item) => {
+        const getCommand = new GetObjectCommand({
+          Bucket: bucketName,
+          Key: item.videoKey,
+        });
+
+        const signedUrl = await getSignedUrl(s3, getCommand, { expiresIn: 3600 });
+
+        return {
+          ...item,
+          fileUrl: signedUrl,
+        };
+      })
+    );
+
+    res.json(jobsWithSignedUrls);
+  } catch (err) {
+    console.error("Error listing transcription jobs:", err);
+    res.status(500).json({ error: "Failed to list transcription jobs" });
+  }
+});
+
 
 app.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
