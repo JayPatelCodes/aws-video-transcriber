@@ -75,7 +75,7 @@ DYNAMODB_TABLE_NAME=your-dynamodb-table
 Start the backend server:
 
 ```bash
-npx ts-node-dev src/server.ts
+npm run dev
 ```
 
 > **Note:** Run this command inside the `backend` directory to ensure the `.env` file loads correctly.
@@ -87,7 +87,7 @@ Open a new terminal window/tab:
 ```bash
 cd frontend
 npm install
-npm run dev
+npm start
 ```
 
 ---
@@ -101,7 +101,7 @@ npm run dev
 
 ## Demo Video
 
-- Video will be available soon.
+- A demo video will be available soon.
 
 ## Usage
 
